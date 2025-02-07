@@ -1,11 +1,19 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import Layout from "../layouts/Layout.astro";
+import Standard from "../domain/math/Standard";
 
 // Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
 // Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+
+// Demonstrate the Standard math library visually
+const v1 = { x: 1, y: 2, z: 3 };
+const v2 = { x: 4, y: 5, z: 6 };
+const v3 = Standard.add(v1, v2);
 ---
 
 <Layout>
-	<Welcome />
+  <h1>Hello World</h1>
+  <p>v1: {JSON.stringify(v1)}</p>
+  <p>v2: {JSON.stringify(v2)}</p>
+  <p>v3: {JSON.stringify(v3)}</p>
 </Layout>
