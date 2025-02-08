@@ -1,0 +1,251 @@
+---
+import type { Vector } from "../domain/math/Standard";
+
+interface Props {
+  v1: Vector;
+  v2: Vector;
+  v3: Vector;
+}
+
+const { v1, v2, v3 } = Astro.props;
+---
+
+<vector-scene
+  data-v1={v1.toJSON()}
+  data-v2={v2.toJSON()}
+  data-v3={v3.toJSON()}
+  class="block w-full h-full"
+>
+  <canvas id="renderCanvas" class="block w-full h-full touch-none"></canvas>
+</vector-scene>
+
+<style>
+  canvas {
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+</style>
+
+<script>
+  console.log("Scene script starting...");
+
+  import { Vector } from "../domain/math/Standard";
+  import {
+    Engine,
+    Scene,
+    Vector3,
+    ArcRotateCamera,
+    HemisphericLight,
+    Color3,
+    Color4,
+    StandardMaterial,
+    MeshBuilder,
+  } from "@babylonjs/core";
+
+  class VectorSceneElement extends HTMLElement {
+    connectedCallback() {
+      try {
+        console.log("Scene: Initializing...");
+
+        // Get the props from the dataset
+        const v1 = Vector.parse(this.dataset.v1 || "");
+        const v2 = Vector.parse(this.dataset.v2 || "");
+        const v3 = Vector.parse(this.dataset.v3 || "");
+        console.log("Vectors loaded:", { v1, v2, v3 });
+
+        // Get the canvas
+        const canvas = this.querySelector("canvas");
+        if (!canvas) {
+          throw new Error("Canvas element not found");
+        }
+
+        // Create engine
+        const engine = new Engine(canvas as HTMLCanvasElement, true);
+        console.log("Engine created");
+
+        // Create scene with clear color
+        const scene = new Scene(engine);
+        scene.clearColor = new Color4(0.1, 0.1, 0.2, 1); // Dark blue background with alpha
+        console.log("Scene created");
+
+        // Adjust camera position and parameters
+        const camera = new ArcRotateCamera(
+          "camera",
+          -Math.PI / 2, // Alpha (rotation around Y)
+          Math.PI / 2.5, // Beta (rotation around X)
+          20, // Radius
+          new Vector3(0, 0, 0), // Target
+          scene
+        );
+        camera.attachControl(canvas, true);
+        camera.lowerRadiusLimit = 5;
+        camera.upperRadiusLimit = 50;
+        camera.setPosition(new Vector3(10, 10, 10)); // Position camera at an angle
+        console.log("Camera created");
+
+        // Add multiple lights for better visibility
+        const hemisphericLight = new HemisphericLight(
+          "hemisphericLight",
+          new Vector3(0, 1, 0),
+          scene
+        );
+        hemisphericLight.intensity = 0.7;
+
+        // Create grid on XZ plane
+        const gridSize = 20;
+        const grid = MeshBuilder.CreateGround(
+          "grid",
+          {
+            width: gridSize,
+            height: gridSize,
+            subdivisions: 20,
+          },
+          scene
+        );
+        const gridMaterial = new StandardMaterial("gridMat", scene);
+        gridMaterial.wireframe = true;
+        gridMaterial.alpha = 0.5;
+        gridMaterial.emissiveColor = new Color3(0.2, 0.2, 0.2); // Make grid visible
+        grid.material = gridMaterial;
+        grid.position.y = -0.01; // Slightly below origin to avoid z-fighting
+        console.log("Grid created");
+
+        // Create vector arrows with thicker lines
+        const vectorScale = 1; // Adjust if vectors need scaling
+        this.createVector(
+          new Vector3(
+            v1.x * vectorScale,
+            v1.y * vectorScale,
+            v1.z * vectorScale
+          ),
+          new Color3(1, 0, 0), // Bright red
+          scene
+        );
+        this.createVector(
+          new Vector3(
+            v2.x * vectorScale,
+            v2.y * vectorScale,
+            v2.z * vectorScale
+          ),
+          new Color3(0, 0, 1), // Bright blue
+          scene
+        );
+        this.createVector(
+          new Vector3(
+            v3.x * vectorScale,
+            v3.y * vectorScale,
+            v3.z * vectorScale
+          ),
+          new Color3(0, 1, 0), // Bright green
+          scene
+        );
+        console.log("Vectors created");
+
+        // Create axes with thicker lines
+        this.createAxes(scene);
+        console.log("Axes created");
+
+        // Render loop
+        engine.runRenderLoop(() => {
+          scene.render();
+        });
+
+        // Handle window resize
+        window.addEventListener("resize", () => {
+          engine.resize();
+        });
+
+        console.log("Scene: Initialization complete");
+      } catch (error) {
+        console.error("Scene initialization failed:", error);
+      }
+    }
+
+    createVector(vector: Vector3, color: Color3, scene: Scene) {
+      const start = Vector3.Zero();
+      const end = vector;
+
+      // Create thicker line for vector
+      const line = MeshBuilder.CreateTube(
+        "vector",
+        {
+          path: [start, end],
+          radius: 0.03,
+        },
+        scene
+      );
+
+      // Create larger arrow head using CreateCylinder instead of CreateCone
+      const arrowHead = MeshBuilder.CreateCylinder(
+        "arrowHead",
+        {
+          height: 0.3,
+          diameterTop: 0,
+          diameterBottom: 0.2,
+        },
+        scene
+      );
+
+      // Position and rotate arrow head
+      const direction = end.subtract(start).normalize();
+      arrowHead.position = end.subtract(direction.scale(0.15));
+      arrowHead.lookAt(end);
+
+      // Apply emissive material for better visibility
+      const material = new StandardMaterial("vectorMat", scene);
+      material.emissiveColor = color;
+      material.specularColor = Color3.Black();
+
+      const lineMaterial = new StandardMaterial("lineMat", scene);
+      lineMaterial.emissiveColor = color;
+      lineMaterial.specularColor = Color3.Black();
+
+      arrowHead.material = material;
+      line.material = lineMaterial;
+
+      return { line, arrowHead };
+    }
+
+    createAxes(scene: Scene) {
+      const size = 10;
+      const axes = [
+        {
+          start: Vector3.Zero(),
+          end: new Vector3(size, 0, 0),
+          color: new Color3(1, 0, 0),
+          label: "X",
+        },
+        {
+          start: Vector3.Zero(),
+          end: new Vector3(0, size, 0),
+          color: new Color3(0, 1, 0),
+          label: "Y",
+        },
+        {
+          start: Vector3.Zero(),
+          end: new Vector3(0, 0, size),
+          color: new Color3(0, 0, 1),
+          label: "Z",
+        },
+      ];
+
+      axes.forEach(({ start, end, color }) => {
+        const line = MeshBuilder.CreateTube(
+          "axis",
+          {
+            path: [start, end],
+            radius: 0.02,
+          },
+          scene
+        );
+        const material = new StandardMaterial("axisMat", scene);
+        material.emissiveColor = color;
+        material.specularColor = Color3.Black();
+        line.material = material;
+      });
+    }
+  }
+
+  // Register the web component
+  customElements.define("vector-scene", VectorSceneElement);
+</script>

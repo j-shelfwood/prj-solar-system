@@ -1,0 +1,184 @@
+---
+import type { Vector } from "../domain/math/Standard";
+
+interface Props {
+  v1: Vector;
+  v2: Vector;
+  v3: Vector;
+}
+
+const { v1, v2, v3 } = Astro.props;
+---
+
+<vector-scene
+  data-v1={v1.toJSON()}
+  data-v2={v2.toJSON()}
+  data-v3={v3.toJSON()}
+  class="block w-full h-full"
+>
+  <canvas id="renderCanvas" class="block w-full h-full touch-none"></canvas>
+</vector-scene>
+
+<style>
+  canvas {
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+</style>
+
+<script>
+  import { Vector } from "../domain/math/Standard";
+  import { BaseScene } from "./base/BaseScene";
+  import {
+    Vector3,
+    Color3,
+    StandardMaterial,
+    MeshBuilder,
+    Scene,
+  } from "@babylonjs/core";
+
+  class VectorSceneElement extends BaseScene {
+    protected setupScene() {
+      if (!this.scene) return;
+
+      const v1 = Vector.parse(this.dataset.v1 || "");
+      const v2 = Vector.parse(this.dataset.v2 || "");
+      const v3 = Vector.parse(this.dataset.v3 || "");
+
+      // Create grid and vectors
+      this.createGrid();
+      this.createVectors(v1, v2, v3);
+      this.createAxes();
+    }
+
+    private createGrid() {
+      if (!this.scene) return;
+
+      const gridSize = 20;
+      const grid = MeshBuilder.CreateGround(
+        "grid",
+        {
+          width: gridSize,
+          height: gridSize,
+          subdivisions: 20,
+        },
+        this.scene
+      );
+      const gridMaterial = new StandardMaterial("gridMat", this.scene);
+      gridMaterial.wireframe = true;
+      gridMaterial.alpha = 0.5;
+      gridMaterial.emissiveColor = new Color3(0.2, 0.2, 0.2);
+      grid.material = gridMaterial;
+      grid.position.y = -0.01;
+    }
+
+    private createVectors(v1: Vector, v2: Vector, v3: Vector) {
+      if (!this.scene) return;
+
+      const vectorScale = 1;
+      this.createVector(
+        new Vector3(v1.x * vectorScale, v1.y * vectorScale, v1.z * vectorScale),
+        new Color3(1, 0, 0),
+        this.scene
+      );
+      this.createVector(
+        new Vector3(v2.x * vectorScale, v2.y * vectorScale, v2.z * vectorScale),
+        new Color3(0, 0, 1),
+        this.scene
+      );
+      this.createVector(
+        new Vector3(v3.x * vectorScale, v3.y * vectorScale, v3.z * vectorScale),
+        new Color3(0, 1, 0),
+        this.scene
+      );
+    }
+
+    private createVector(vector: Vector3, color: Color3, scene: Scene) {
+      const start = Vector3.Zero();
+      const end = vector;
+
+      // Create thicker line for vector
+      const line = MeshBuilder.CreateTube(
+        "vector",
+        {
+          path: [start, end],
+          radius: 0.03,
+        },
+        scene
+      );
+
+      // Create arrow head
+      const arrowHead = MeshBuilder.CreateCylinder(
+        "arrowHead",
+        {
+          height: 0.3,
+          diameterTop: 0,
+          diameterBottom: 0.2,
+        },
+        scene
+      );
+
+      // Position and rotate arrow head
+      const direction = end.subtract(start).normalize();
+      arrowHead.position = end.subtract(direction.scale(0.15));
+      arrowHead.lookAt(end);
+
+      // Apply materials
+      const material = new StandardMaterial("vectorMat", scene);
+      material.emissiveColor = color;
+      material.specularColor = Color3.Black();
+
+      const lineMaterial = new StandardMaterial("lineMat", scene);
+      lineMaterial.emissiveColor = color;
+      lineMaterial.specularColor = Color3.Black();
+
+      arrowHead.material = material;
+      line.material = lineMaterial;
+
+      return { line, arrowHead };
+    }
+
+    private createAxes() {
+      if (!this.scene) return;
+
+      const size = 10;
+      const axes = [
+        {
+          start: Vector3.Zero(),
+          end: new Vector3(size, 0, 0),
+          color: new Color3(1, 0, 0),
+          label: "X",
+        },
+        {
+          start: Vector3.Zero(),
+          end: new Vector3(0, size, 0),
+          color: new Color3(0, 1, 0),
+          label: "Y",
+        },
+        {
+          start: Vector3.Zero(),
+          end: new Vector3(0, 0, size),
+          color: new Color3(0, 0, 1),
+          label: "Z",
+        },
+      ];
+
+      axes.forEach(({ start, end, color }) => {
+        const line = MeshBuilder.CreateTube(
+          "axis",
+          {
+            path: [start, end],
+            radius: 0.02,
+          },
+          this.scene
+        );
+        const material = new StandardMaterial("axisMat", this.scene);
+        material.emissiveColor = color;
+        material.specularColor = Color3.Black();
+        line.material = material;
+      });
+    }
+  }
+
+  customElements.define("vector-scene", VectorSceneElement);
+</script>

@@ -1,10 +1,38 @@
-export type Vector = {
+export class Vector {
     x: number;
     y: number;
     z: number;
-};
 
-export default class Standard {
+    constructor(x: number, y: number, z: number) {
+        this.x = x;
+        this.y = y;
+        this.z = z;
+    }
+
+    /**
+     * Get the vector as a JSON string
+     */
+    toJSON(): string {
+        return JSON.stringify({ x: this.x, y: this.y, z: this.z });
+    }
+
+    /**
+     * Get the vector as a JSON object
+     */
+    toObject(): { x: number, y: number, z: number } {
+        return { x: this.x, y: this.y, z: this.z };
+    }
+
+    /**
+     * Parse a JSON string into a Vector
+     */
+    static parse(json: string): Vector {
+        const obj = JSON.parse(json);
+        return new Vector(obj.x, obj.y, obj.z);
+    }
+}
+
+export class Standard {
     /**
      * Adds two vectors
      *
@@ -13,7 +41,7 @@ export default class Standard {
      * @returns The sum of the two vectors
      * */
     static add(v1: Vector, v2: Vector): Vector {
-        return { x: v1.x + v2.x, y: v1.y + v2.y, z: v1.z + v2.z };
+        return new Vector(v1.x + v2.x, v1.y + v2.y, v1.z + v2.z);
     }
 
     /**
@@ -24,7 +52,7 @@ export default class Standard {
      * @returns The difference of the two vectors
      * */
     static subtract(v1: Vector, v2: Vector): Vector {
-        return { x: v1.x - v2.x, y: v1.y - v2.y, z: v1.z - v2.z };
+        return new Vector(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z);
     }
 
     /**
@@ -46,11 +74,11 @@ export default class Standard {
      * @returns The cross product of the two vectors
      * */
     static cross(v1: Vector, v2: Vector): Vector {
-        return {
-            x: v1.y * v2.z - v1.z * v2.y,
-            y: v1.z * v2.x - v1.x * v2.z,
-            z: v1.x * v2.y - v1.y * v2.x,
-        };
+        return new Vector(
+            v1.y * v2.z - v1.z * v2.y,
+            v1.z * v2.x - v1.x * v2.z,
+            v1.x * v2.y - v1.y * v2.x
+        );
     }
 
     /**
@@ -71,6 +99,6 @@ export default class Standard {
      * */
     static normalize(v: Vector): Vector {
         const mag = Standard.magnitude(v);
-        return mag === 0 ? { x: 0, y: 0, z: 0 } : { x: v.x / mag, y: v.y / mag, z: v.z / mag };
+        return mag === 0 ? new Vector(0, 0, 0) : new Vector(v.x / mag, v.y / mag, v.z / mag);
     }
 }

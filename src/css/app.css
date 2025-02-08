@@ -2,6 +2,7 @@
 @import "@fontsource/roboto-mono/700.css";
 @import "tailwindcss/preflight";
 @import "tailwindcss/utilities";
+@import "tailwindcss";
 
 @theme {
     /* Space black */

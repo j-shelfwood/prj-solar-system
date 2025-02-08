@@ -1,19 +1,31 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import Standard from "../domain/math/Standard";
+import SceneLayout from "../components/SceneLayout.astro";
+import VectorScene from "../components/VectorScene.astro";
+import { Standard, Vector } from "../domain/math/Standard";
 
 // Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
 // Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
 
 // Demonstrate the Standard math library visually
-const v1 = { x: 1, y: 2, z: 3 };
-const v2 = { x: 4, y: 5, z: 6 };
+const v1 = new Vector(4, 5, 13);
+const v2 = new Vector(4, 5, 6);
 const v3 = Standard.add(v1, v2);
+
+const vectorInfo = [
+  { label: "v1", value: JSON.stringify(v1), color: "text-red-400" },
+  { label: "v2", value: JSON.stringify(v2), color: "text-blue-400" },
+  { label: "v3", value: JSON.stringify(v3), color: "text-green-400" },
+];
 ---
 
-<Layout>
-  <h1>Hello World</h1>
-  <p>v1: {JSON.stringify(v1)}</p>
-  <p>v2: {JSON.stringify(v2)}</p>
-  <p>v3: {JSON.stringify(v3)}</p>
+<Layout title="Vector Addition">
+  <SceneLayout
+    title="Vector"
+    subtitle="Addition"
+    info={vectorInfo}
+    equation="v3 = v1 + v2"
+  >
+    <VectorScene v1={v1} v2={v2} v3={v3} />
+  </SceneLayout>
 </Layout>

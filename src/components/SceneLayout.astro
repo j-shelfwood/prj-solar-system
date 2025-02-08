@@ -1,0 +1,49 @@
+---
+interface Props {
+  title: string;
+  subtitle?: string;
+  info?: { label: string; value: string; color?: string }[];
+  equation?: string;
+}
+
+const { title, subtitle, info = [], equation } = Astro.props;
+---
+
+<div class="relative w-[calc(100vw-64px)] h-[calc(100vh-64px)] bg-black/20 rounded-lg">
+  <!-- Title -->
+  <h1 class="absolute top-8 left-8 text-2xl tracking-wider font-light uppercase">
+    {title}
+    {subtitle &&
+      <span class="font-mono font-medium tracking-tight">{subtitle}</span>
+    }
+  </h1>
+
+  <!-- Information Panel -->
+  {info.length > 0 && (
+    <div class="absolute top-8 right-8 text-right">
+      <div class="space-y-2 font-mono text-sm">
+        {info.map(({ label, value, color }) => (
+          <p>{label} = <span class={color}>{value}</span></p>
+        ))}
+      </div>
+    </div>
+  )}
+
+  <!-- Scene Container -->
+  <slot />
+
+  <!-- Controls -->
+  <div class="absolute bottom-8 left-8 font-mono text-sm opacity-75">
+    <div class="space-y-1">
+      <p>🖱️ Drag: Rotate</p>
+      <p>🖱️ Scroll: Zoom</p>
+    </div>
+  </div>
+
+  <!-- Equation Info -->
+  {equation && (
+    <div class="absolute bottom-8 right-8 font-mono text-sm">
+      <p>{equation}</p>
+    </div>
+  )}
+</div>

@@ -9,6 +9,8 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@babylonjs/core": "^7.48.1",
+    "@babylonjs/inspector": "^7.48.1",
     "@fontsource/roboto-mono": "^5.1.1",
     "@tailwindcss/vite": "^4.0.4",
     "astro": "^5.2.5",
