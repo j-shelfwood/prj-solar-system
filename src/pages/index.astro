@@ -26,6 +26,13 @@ const vectorInfo = [
     info={vectorInfo}
     equation="v3 = v1 + v2"
   >
-    <VectorScene v1={v1} v2={v2} v3={v3} />
+    <VectorScene
+      v1={v1}
+      v2={v2}
+      v3={v3}
+      vectorDelay={500}
+      oscillationAmount={0.03}
+      cameraRadius={30}
+    />
   </SceneLayout>
 </Layout>

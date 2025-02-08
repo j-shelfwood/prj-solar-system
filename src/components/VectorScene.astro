@@ -5,15 +5,68 @@ interface Props {
   v1: Vector;
   v2: Vector;
   v3: Vector;
+  // Camera settings
+  cameraRadius?: number;
+  cameraAlpha?: number;
+  cameraBeta?: number;
+  // Animation settings
+  vectorDelay?: number;
+  vectorFrames?: number;
+  vectorFrameTime?: number;
+  // Vector appearance
+  vectorRadius?: number;
+  arrowHeight?: number;
+  arrowDiameter?: number;
+  // Camera movement
+  oscillationSpeed?: number;
+  oscillationAmount?: number;
+  verticalOscillationAmount?: number;
 }
 
-const { v1, v2, v3 } = Astro.props;
+const {
+  v1,
+  v2,
+  v3,
+  // Default values for all parameters
+  cameraRadius = 25,
+  cameraAlpha = Math.PI / 4,
+  cameraBeta = Math.PI / 3,
+  vectorDelay = 300,
+  vectorFrames = 30,
+  vectorFrameTime = 16,
+  vectorRadius = 0.03,
+  arrowHeight = 0.3,
+  arrowDiameter = 0.2,
+  oscillationSpeed = 0.001,
+  oscillationAmount = 0.05,
+  verticalOscillationAmount = 0.02,
+} = Astro.props;
 ---
 
 <vector-scene
   data-v1={v1.toJSON()}
   data-v2={v2.toJSON()}
   data-v3={v3.toJSON()}
+  data-camera={JSON.stringify({
+    radius: cameraRadius,
+    alpha: cameraAlpha,
+    beta: cameraBeta,
+  })}
+  data-animation={JSON.stringify({
+    vectorDelay,
+    vectorFrames,
+    vectorFrameTime,
+  })}
+  data-appearance={JSON.stringify({
+    vectorRadius,
+    arrowHeight,
+    arrowDiameter,
+  })}
+  data-movement={JSON.stringify({
+    oscillationSpeed,
+    oscillationAmount,
+    verticalOscillationAmount,
+  })}
   class="block w-full h-full"
 >
   <canvas id="renderCanvas" class="block w-full h-full touch-none"></canvas>
@@ -35,20 +88,193 @@ const { v1, v2, v3 } = Astro.props;
     StandardMaterial,
     MeshBuilder,
     Scene,
+    Animation,
+    EasingFunction,
+    Mesh,
   } from "@babylonjs/core";
 
+  interface CameraSettings {
+    radius: number;
+    alpha: number;
+    beta: number;
+  }
+
+  interface AnimationSettings {
+    vectorDelay: number;
+    vectorFrames: number;
+    vectorFrameTime: number;
+  }
+
+  interface AppearanceSettings {
+    vectorRadius: number;
+    arrowHeight: number;
+    arrowDiameter: number;
+  }
+
+  interface MovementSettings {
+    oscillationSpeed: number;
+    oscillationAmount: number;
+    verticalOscillationAmount: number;
+  }
+
   class VectorSceneElement extends BaseScene {
+    private vectors: { line: Mesh; arrowHead: Mesh }[] = [];
+    private settings: {
+      camera: CameraSettings;
+      animation: AnimationSettings;
+      appearance: AppearanceSettings;
+      movement: MovementSettings;
+    };
+
+    constructor() {
+      super();
+      // Parse settings from data attributes
+      this.settings = {
+        camera: JSON.parse(this.dataset.camera || "{}"),
+        animation: JSON.parse(this.dataset.animation || "{}"),
+        appearance: JSON.parse(this.dataset.appearance || "{}"),
+        movement: JSON.parse(this.dataset.movement || "{}"),
+      };
+    }
+
     protected setupScene() {
-      if (!this.scene) return;
+      if (!this.scene || !this.camera) return;
 
       const v1 = Vector.parse(this.dataset.v1 || "");
       const v2 = Vector.parse(this.dataset.v2 || "");
       const v3 = Vector.parse(this.dataset.v3 || "");
 
-      // Create grid and vectors
+      // Set initial camera position
+      const { radius, alpha, beta } = this.settings.camera;
+      this.camera.alpha = alpha;
+      this.camera.beta = beta;
+      this.camera.radius = radius;
+
+      // Create environment
       this.createGrid();
-      this.createVectors(v1, v2, v3);
       this.createAxes();
+
+      // Animate vectors after a short delay
+      setTimeout(() => {
+        this.animateVectors(v1, v2, v3);
+      }, 500);
+
+      // Add subtle camera movement
+      this.addCameraMovement();
+    }
+
+    private async animateVectors(v1: Vector, v2: Vector, v3: Vector) {
+      const { vectorDelay } = this.settings.animation;
+
+      await this.createAnimatedVector(v1, new Color3(1, 0, 0));
+      await this.delay(vectorDelay);
+      await this.createAnimatedVector(v2, new Color3(0, 0, 1));
+      await this.delay(vectorDelay);
+      await this.createAnimatedVector(v3, new Color3(0, 1, 0));
+    }
+
+    private delay(ms: number): Promise<void> {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    private async createAnimatedVector(vector: Vector, color: Color3) {
+      if (!this.scene) return;
+
+      const { vectorRadius, arrowHeight, arrowDiameter } =
+        this.settings.appearance;
+      const { vectorFrames, vectorFrameTime } = this.settings.animation;
+
+      let line = MeshBuilder.CreateTube(
+        "vector",
+        {
+          path: [Vector3.Zero(), Vector3.Zero()],
+          radius: vectorRadius,
+          updatable: true,
+        },
+        this.scene
+      );
+
+      // Create the arrow head
+      const arrowHead = MeshBuilder.CreateCylinder(
+        "arrowHead",
+        {
+          height: arrowHeight,
+          diameterTop: 0,
+          diameterBottom: arrowDiameter,
+        },
+        this.scene
+      );
+
+      // Apply materials
+      const material = new StandardMaterial("vectorMat", this.scene);
+      material.emissiveColor = color;
+      material.specularColor = Color3.Black();
+      line.material = material;
+      arrowHead.material = material;
+
+      // Initially hide arrow head
+      arrowHead.setEnabled(false);
+
+      // Animate the vector growth
+      const endPoint = new Vector3(vector.x, vector.y, vector.z);
+
+      for (let i = 0; i <= vectorFrames; i++) {
+        const t = i / vectorFrames;
+        const currentEnd = Vector3.Lerp(Vector3.Zero(), endPoint, t);
+
+        line.dispose();
+        line = MeshBuilder.CreateTube(
+          "vector",
+          {
+            path: [Vector3.Zero(), currentEnd],
+            radius: vectorRadius,
+          },
+          this.scene
+        );
+        line.material = material;
+
+        if (i === vectorFrames) {
+          // Show and position arrow head at the end
+          arrowHead.setEnabled(true);
+
+          // Calculate direction from start to end (not normalized)
+          const direction = endPoint.subtract(Vector3.Zero()).normalize();
+
+          // Position arrow head at the end point, slightly offset back along the vector
+          const offsetDistance = arrowHeight / 2;
+          const arrowPosition = endPoint.subtract(
+            direction.scale(offsetDistance)
+          );
+          arrowHead.position = arrowPosition;
+
+          // Rotate arrow head to point along the vector direction
+          const rotationAxis = Vector3.Cross(Vector3.Up(), direction);
+          const angle = Math.acos(Vector3.Dot(Vector3.Up(), direction));
+          arrowHead.rotate(rotationAxis, angle);
+        }
+
+        await this.delay(vectorFrameTime);
+      }
+
+      this.vectors.push({ line, arrowHead });
+    }
+
+    private addCameraMovement() {
+      if (!this.camera) return;
+
+      const { oscillationSpeed, oscillationAmount, verticalOscillationAmount } =
+        this.settings.movement;
+      const { alpha, beta } = this.settings.camera;
+
+      let time = 0;
+      this.scene?.registerBeforeRender(() => {
+        time += oscillationSpeed;
+
+        // Very subtle oscillation
+        this.camera!.alpha = alpha + Math.sin(time) * oscillationAmount;
+        this.camera!.beta =
+          beta + Math.sin(time * 0.5) * verticalOscillationAmount;
+      });
     }
 
     private createGrid() {
@@ -70,72 +296,6 @@ const { v1, v2, v3 } = Astro.props;
       gridMaterial.emissiveColor = new Color3(0.2, 0.2, 0.2);
       grid.material = gridMaterial;
       grid.position.y = -0.01;
-    }
-
-    private createVectors(v1: Vector, v2: Vector, v3: Vector) {
-      if (!this.scene) return;
-
-      const vectorScale = 1;
-      this.createVector(
-        new Vector3(v1.x * vectorScale, v1.y * vectorScale, v1.z * vectorScale),
-        new Color3(1, 0, 0),
-        this.scene
-      );
-      this.createVector(
-        new Vector3(v2.x * vectorScale, v2.y * vectorScale, v2.z * vectorScale),
-        new Color3(0, 0, 1),
-        this.scene
-      );
-      this.createVector(
-        new Vector3(v3.x * vectorScale, v3.y * vectorScale, v3.z * vectorScale),
-        new Color3(0, 1, 0),
-        this.scene
-      );
-    }
-
-    private createVector(vector: Vector3, color: Color3, scene: Scene) {
-      const start = Vector3.Zero();
-      const end = vector;
-
-      // Create thicker line for vector
-      const line = MeshBuilder.CreateTube(
-        "vector",
-        {
-          path: [start, end],
-          radius: 0.03,
-        },
-        scene
-      );
-
-      // Create arrow head
-      const arrowHead = MeshBuilder.CreateCylinder(
-        "arrowHead",
-        {
-          height: 0.3,
-          diameterTop: 0,
-          diameterBottom: 0.2,
-        },
-        scene
-      );
-
-      // Position and rotate arrow head
-      const direction = end.subtract(start).normalize();
-      arrowHead.position = end.subtract(direction.scale(0.15));
-      arrowHead.lookAt(end);
-
-      // Apply materials
-      const material = new StandardMaterial("vectorMat", scene);
-      material.emissiveColor = color;
-      material.specularColor = Color3.Black();
-
-      const lineMaterial = new StandardMaterial("lineMat", scene);
-      lineMaterial.emissiveColor = color;
-      lineMaterial.specularColor = Color3.Black();
-
-      arrowHead.material = material;
-      line.material = lineMaterial;
-
-      return { line, arrowHead };
     }
 
     private createAxes() {
