@@ -8,8 +8,8 @@ import { Standard, Vector } from "../domain/math/Standard";
 // Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
 
 // Demonstrate the Standard math library visually
-const v1 = new Vector(4, 5, 13);
-const v2 = new Vector(4, 5, 6);
+const v1 = new Vector(1, 5, 3);
+const v2 = new Vector(4, 1, 6);
 const v3 = Standard.add(v1, v2);
 
 const vectorInfo = [
@@ -30,8 +30,6 @@ const vectorInfo = [
       v1={v1}
       v2={v2}
       v3={v3}
-      vectorDelay={500}
-      oscillationAmount={0.03}
       cameraRadius={30}
     />
   </SceneLayout>

@@ -2,44 +2,58 @@
 import type { Vector } from "../domain/math/Standard";
 
 interface Props {
+  // Core vectors
   v1: Vector;
   v2: Vector;
   v3: Vector;
-  // Camera settings
-  cameraRadius?: number;
+
+  // Camera configuration
   cameraAlpha?: number;
   cameraBeta?: number;
-  // Animation settings
-  vectorDelay?: number;
-  vectorFrames?: number;
-  vectorFrameTime?: number;
+  cameraRadius?: number;
+  cameraMinZoom?: number;
+  cameraMaxZoom?: number;
+
+  // Scene configuration
+  gridSize?: number;
+  gridSubdivisions?: number;
+  axisLength?: number;
+  axisRadius?: number;
+
   // Vector appearance
   vectorRadius?: number;
   arrowHeight?: number;
   arrowDiameter?: number;
-  // Camera movement
-  oscillationSpeed?: number;
-  oscillationAmount?: number;
-  verticalOscillationAmount?: number;
+  vectorColors?: [string, string, string]; // [v1, v2, v3]
+
+  // Lighting
+  lightIntensity?: number;
+  ambientLight?: number;
 }
 
 const {
   v1,
   v2,
   v3,
-  // Default values for all parameters
+  // Camera defaults
+  cameraAlpha = -Math.PI / 2, // Side view
+  cameraBeta = Math.PI / 6, // 30° elevation
   cameraRadius = 25,
-  cameraAlpha = Math.PI / 4,
-  cameraBeta = Math.PI / 3,
-  vectorDelay = 300,
-  vectorFrames = 30,
-  vectorFrameTime = 16,
+  cameraMinZoom = 10,
+  cameraMaxZoom = 50,
+  // Scene defaults
+  gridSize = 20,
+  gridSubdivisions = 10,
+  axisLength = 10,
+  axisRadius = 0.02,
+  // Vector defaults
   vectorRadius = 0.03,
-  arrowHeight = 0.3,
-  arrowDiameter = 0.2,
-  oscillationSpeed = 0.001,
-  oscillationAmount = 0.05,
-  verticalOscillationAmount = 0.02,
+  arrowHeight = 0.5,
+  arrowDiameter = 0.4,
+  vectorColors = ["#ff0000", "#0000ff", "#00ff00"],
+  // Lighting
+  lightIntensity = 0.7,
+  ambientLight = 0.25,
 } = Astro.props;
 ---
 
@@ -47,25 +61,12 @@ const {
   data-v1={v1.toJSON()}
   data-v2={v2.toJSON()}
   data-v3={v3.toJSON()}
-  data-camera={JSON.stringify({
-    radius: cameraRadius,
-    alpha: cameraAlpha,
-    beta: cameraBeta,
-  })}
-  data-animation={JSON.stringify({
-    vectorDelay,
-    vectorFrames,
-    vectorFrameTime,
-  })}
-  data-appearance={JSON.stringify({
-    vectorRadius,
-    arrowHeight,
-    arrowDiameter,
-  })}
-  data-movement={JSON.stringify({
-    oscillationSpeed,
-    oscillationAmount,
-    verticalOscillationAmount,
+  data-config={JSON.stringify({
+    camera: { alpha: cameraAlpha, beta: cameraBeta, radius: cameraRadius },
+    scene: { gridSize, gridSubdivisions, axisLength, axisRadius },
+    vectors: { vectorRadius, arrowHeight, arrowDiameter, vectorColors },
+    lighting: { lightIntensity, ambientLight },
+    zoom: { min: cameraMinZoom, max: cameraMaxZoom },
   })}
   class="block w-full h-full"
 >
@@ -88,253 +89,193 @@ const {
     StandardMaterial,
     MeshBuilder,
     Scene,
-    Animation,
-    EasingFunction,
     Mesh,
+    HemisphericLight,
   } from "@babylonjs/core";
 
-  interface CameraSettings {
-    radius: number;
-    alpha: number;
-    beta: number;
-  }
-
-  interface AnimationSettings {
-    vectorDelay: number;
-    vectorFrames: number;
-    vectorFrameTime: number;
-  }
-
-  interface AppearanceSettings {
-    vectorRadius: number;
-    arrowHeight: number;
-    arrowDiameter: number;
-  }
-
-  interface MovementSettings {
-    oscillationSpeed: number;
-    oscillationAmount: number;
-    verticalOscillationAmount: number;
-  }
-
   class VectorSceneElement extends BaseScene {
-    private vectors: { line: Mesh; arrowHead: Mesh }[] = [];
     private settings: {
-      camera: CameraSettings;
-      animation: AnimationSettings;
-      appearance: AppearanceSettings;
-      movement: MovementSettings;
+      camera: { alpha: number; beta: number; radius: number };
+      scene: {
+        gridSize: number;
+        gridSubdivisions: number;
+        axisLength: number;
+        axisRadius: number;
+      };
+      vectors: {
+        vectorRadius: number;
+        arrowHeight: number;
+        arrowDiameter: number;
+        vectorColors: string[];
+      };
+      lighting: { lightIntensity: number; ambientLight: number };
+      zoom: { min: number; max: number };
     };
 
     constructor() {
       super();
-      // Parse settings from data attributes
+      const config = JSON.parse(this.dataset.config || "{}");
       this.settings = {
-        camera: JSON.parse(this.dataset.camera || "{}"),
-        animation: JSON.parse(this.dataset.animation || "{}"),
-        appearance: JSON.parse(this.dataset.appearance || "{}"),
-        movement: JSON.parse(this.dataset.movement || "{}"),
+        camera: {
+          alpha: -Math.PI / 2,
+          beta: Math.PI / 6,
+          radius: 25,
+          ...config.camera,
+        },
+        scene: {
+          gridSize: 20,
+          gridSubdivisions: 10,
+          axisLength: 10,
+          axisRadius: 0.02,
+          ...config.scene,
+        },
+        vectors: {
+          vectorRadius: 0.03,
+          arrowHeight: 0.5,
+          arrowDiameter: 0.4,
+          vectorColors: [],
+          ...config.vectors,
+        },
+        lighting: {
+          lightIntensity: 0.7,
+          ambientLight: 0.25,
+          ...config.lighting,
+        },
+        zoom: { min: 10, max: 50, ...config.zoom },
       };
     }
 
     protected setupScene() {
       if (!this.scene || !this.camera) return;
 
-      const v1 = Vector.parse(this.dataset.v1 || "");
-      const v2 = Vector.parse(this.dataset.v2 || "");
-      const v3 = Vector.parse(this.dataset.v3 || "");
+      // Set up camera
+      this.camera.alpha = this.settings.camera.alpha;
+      this.camera.beta = this.settings.camera.beta;
+      this.camera.radius = this.settings.camera.radius;
+      this.camera.lowerRadiusLimit = this.settings.zoom.min;
+      this.camera.upperRadiusLimit = this.settings.zoom.max;
 
-      // Set initial camera position
-      const { radius, alpha, beta } = this.settings.camera;
-      this.camera.alpha = alpha;
-      this.camera.beta = beta;
-      this.camera.radius = radius;
+      // Lighting
+      new HemisphericLight(
+        "light",
+        new Vector3(0, 1, 0),
+        this.scene
+      ).intensity = this.settings.lighting.lightIntensity;
 
-      // Create environment
+      this.scene.ambientColor = new Color3(
+        this.settings.lighting.ambientLight,
+        this.settings.lighting.ambientLight,
+        this.settings.lighting.ambientLight
+      );
+
+      // Environment
       this.createGrid();
       this.createAxes();
 
-      // Animate vectors after a short delay
-      setTimeout(() => {
-        this.animateVectors(v1, v2, v3);
-      }, 500);
-
-      // Add subtle camera movement
-      this.addCameraMovement();
+      // Vectors
+      this.createVector(
+        Vector.parse(this.dataset.v1 || ""),
+        Color3.FromHexString(this.settings.vectors.vectorColors[0])
+      );
+      this.createVector(
+        Vector.parse(this.dataset.v2 || ""),
+        Color3.FromHexString(this.settings.vectors.vectorColors[1])
+      );
+      this.createVector(
+        Vector.parse(this.dataset.v3 || ""),
+        Color3.FromHexString(this.settings.vectors.vectorColors[2])
+      );
     }
 
-    private async animateVectors(v1: Vector, v2: Vector, v3: Vector) {
-      const { vectorDelay } = this.settings.animation;
-
-      await this.createAnimatedVector(v1, new Color3(1, 0, 0));
-      await this.delay(vectorDelay);
-      await this.createAnimatedVector(v2, new Color3(0, 0, 1));
-      await this.delay(vectorDelay);
-      await this.createAnimatedVector(v3, new Color3(0, 1, 0));
-    }
-
-    private delay(ms: number): Promise<void> {
-      return new Promise((resolve) => setTimeout(resolve, ms));
-    }
-
-    private async createAnimatedVector(vector: Vector, color: Color3) {
+    private createVector(vector: Vector, color: Color3) {
       if (!this.scene) return;
 
-      const { vectorRadius, arrowHeight, arrowDiameter } =
-        this.settings.appearance;
-      const { vectorFrames, vectorFrameTime } = this.settings.animation;
-
-      let line = MeshBuilder.CreateTube(
+      const end = new Vector3(vector.x, vector.y, vector.z);
+      const line = MeshBuilder.CreateTube(
         "vector",
         {
-          path: [Vector3.Zero(), Vector3.Zero()],
-          radius: vectorRadius,
-          updatable: true,
+          path: [Vector3.Zero(), end],
+          radius: this.settings.vectors.vectorRadius,
         },
         this.scene
       );
 
-      // Create the arrow head
-      const arrowHead = MeshBuilder.CreateCylinder(
-        "arrowHead",
-        {
-          height: arrowHeight,
-          diameterTop: 0,
-          diameterBottom: arrowDiameter,
-        },
-        this.scene
-      );
-
-      // Apply materials
       const material = new StandardMaterial("vectorMat", this.scene);
       material.emissiveColor = color;
-      material.specularColor = Color3.Black();
       line.material = material;
-      arrowHead.material = material;
 
-      // Initially hide arrow head
-      arrowHead.setEnabled(false);
-
-      // Animate the vector growth
-      const endPoint = new Vector3(vector.x, vector.y, vector.z);
-
-      for (let i = 0; i <= vectorFrames; i++) {
-        const t = i / vectorFrames;
-        const currentEnd = Vector3.Lerp(Vector3.Zero(), endPoint, t);
-
-        line.dispose();
-        line = MeshBuilder.CreateTube(
-          "vector",
-          {
-            path: [Vector3.Zero(), currentEnd],
-            radius: vectorRadius,
-          },
-          this.scene
-        );
-        line.material = material;
-
-        if (i === vectorFrames) {
-          // Show and position arrow head at the end
-          arrowHead.setEnabled(true);
-
-          // Calculate direction from start to end (not normalized)
-          const direction = endPoint.subtract(Vector3.Zero()).normalize();
-
-          // Position arrow head at the end point, slightly offset back along the vector
-          const offsetDistance = arrowHeight / 2;
-          const arrowPosition = endPoint.subtract(
-            direction.scale(offsetDistance)
-          );
-          arrowHead.position = arrowPosition;
-
-          // Rotate arrow head to point along the vector direction
-          const rotationAxis = Vector3.Cross(Vector3.Up(), direction);
-          const angle = Math.acos(Vector3.Dot(Vector3.Up(), direction));
-          arrowHead.rotate(rotationAxis, angle);
-        }
-
-        await this.delay(vectorFrameTime);
-      }
-
-      this.vectors.push({ line, arrowHead });
+      this.createArrowHead(end, color);
     }
 
-    private addCameraMovement() {
-      if (!this.camera) return;
+    private createArrowHead(position: Vector3, color: Color3) {
+      if (!this.scene) return;
 
-      const { oscillationSpeed, oscillationAmount, verticalOscillationAmount } =
-        this.settings.movement;
-      const { alpha, beta } = this.settings.camera;
+      const arrow = MeshBuilder.CreateCylinder(
+        "arrowHead",
+        {
+          height: this.settings.vectors.arrowHeight,
+          diameterTop: 0,
+          diameterBottom: this.settings.vectors.arrowDiameter,
+        },
+        this.scene
+      );
 
-      let time = 0;
-      this.scene?.registerBeforeRender(() => {
-        time += oscillationSpeed;
-
-        // Very subtle oscillation
-        this.camera!.alpha = alpha + Math.sin(time) * oscillationAmount;
-        this.camera!.beta =
-          beta + Math.sin(time * 0.5) * verticalOscillationAmount;
-      });
+      arrow.position = position;
+      arrow.material = new StandardMaterial("arrowMat", this.scene);
+      (arrow.material as StandardMaterial).emissiveColor = color;
     }
 
     private createGrid() {
       if (!this.scene) return;
 
-      const gridSize = 20;
       const grid = MeshBuilder.CreateGround(
         "grid",
         {
-          width: gridSize,
-          height: gridSize,
-          subdivisions: 20,
+          width: this.settings.scene.gridSize,
+          height: this.settings.scene.gridSize,
+          subdivisions: this.settings.scene.gridSubdivisions,
         },
         this.scene
       );
-      const gridMaterial = new StandardMaterial("gridMat", this.scene);
-      gridMaterial.wireframe = true;
-      gridMaterial.alpha = 0.5;
-      gridMaterial.emissiveColor = new Color3(0.2, 0.2, 0.2);
-      grid.material = gridMaterial;
+
+      const material = new StandardMaterial("gridMat", this.scene);
+      material.wireframe = true;
+      material.alpha = 0.3;
+      material.emissiveColor = new Color3(0.2, 0.2, 0.2);
+      grid.material = material;
       grid.position.y = -0.01;
     }
 
     private createAxes() {
       if (!this.scene) return;
 
-      const size = 10;
       const axes = [
         {
-          start: Vector3.Zero(),
-          end: new Vector3(size, 0, 0),
-          color: new Color3(1, 0, 0),
-          label: "X",
+          end: new Vector3(this.settings.scene.axisLength, 0, 0),
+          color: Color3.Red(),
         },
         {
-          start: Vector3.Zero(),
-          end: new Vector3(0, size, 0),
-          color: new Color3(0, 1, 0),
-          label: "Y",
+          end: new Vector3(0, this.settings.scene.axisLength, 0),
+          color: Color3.Green(),
         },
         {
-          start: Vector3.Zero(),
-          end: new Vector3(0, 0, size),
-          color: new Color3(0, 0, 1),
-          label: "Z",
+          end: new Vector3(0, 0, this.settings.scene.axisLength),
+          color: Color3.Blue(),
         },
       ];
 
-      axes.forEach(({ start, end, color }) => {
+      axes.forEach(({ end, color }) => {
         const line = MeshBuilder.CreateTube(
           "axis",
           {
-            path: [start, end],
-            radius: 0.02,
+            path: [Vector3.Zero(), end],
+            radius: this.settings.scene.axisRadius,
           },
           this.scene
         );
+
         const material = new StandardMaterial("axisMat", this.scene);
         material.emissiveColor = color;
-        material.specularColor = Color3.Black();
         line.material = material;
       });
     }
